@@ -22,7 +22,6 @@
             <transformer>
               <manifestEntries>
                 <Premain-Class>dev.padak.Agent</Premain-Class>
-                <Agent-Class>dev.padak.Agent</Agent-Class>
                 <Can-Retransform-Classes>true</Can-Retransform-Classes>
                 <Can-Redefine-Classes>true</Can-Redefine-Classes>
                 <Implementation-Version>${project.version}</Implementation-Version>
@@ -39,17 +38,6 @@
               </excludes>
             </filter>
           </filters>
-        </configuration>
-      </plugin>
-      <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.1.0</version>
-        <configuration>
-          <archive>
-            <manifestEntries>
-              <Can-Retransform-Classes>true</Can-Retransform-Classes>
-            </manifestEntries>
-          </archive>
         </configuration>
       </plugin>
     </plugins>

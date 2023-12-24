@@ -17,6 +17,12 @@
     <dependencies>
 
         <dependency>
+            <groupId>org.apache.bcel</groupId>
+            <artifactId>bcel</artifactId>
+            <version>6.8.0</version> <!-- Güncel sürümü kontrol edin -->
+        </dependency>
+
+        <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
             <version>1.11.19</version>
@@ -30,6 +36,11 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>9.4</version> <!-- Güncel bir sürüm seçebilirsiniz -->
+        </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -55,7 +66,6 @@
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                             <manifestEntries>
                                 <Premain-Class>dev.padak.Agent</Premain-Class>
-                                <Agent-Class>dev.padak.Agent</Agent-Class>
                                 <Can-Retransform-Classes>true</Can-Retransform-Classes>
                                 <Can-Redefine-Classes>true</Can-Redefine-Classes>
                                 <Implementation-Version>${project.version}</Implementation-Version>
@@ -84,18 +94,6 @@
                 </executions>
             </plugin>
 
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.1.0</version> <!-- Kullandığınız versiyonu belirtin -->
-                <configuration>
-                    <archive>
-                        <manifestEntries>
-                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
-                        </manifestEntries>
-                    </archive>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
 
