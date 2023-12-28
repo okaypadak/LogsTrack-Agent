@@ -1,6 +1,6 @@
 package dev.padak;
 
-import org.apache.bcel.Repository;
+import org.apache.bcel.Constants;
 import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.*;
 import org.slf4j.Logger;
@@ -46,7 +46,7 @@ public class Agent {
                             InstructionList instructionList = new InstructionList(methodGen.getMethod().getCode().getCode());
 
                             // Exception dinleme kodu ve bilgileri alma
-                            addExceptionHandling(instructionList, methodGen, javaClass, className, method.getName());
+                            addExceptionHandling(instructionList, methodGen, javaClass, className, method, method.getName());
 
                             methodGen.setMaxStack();
                             methodGen.setMaxLocals();
@@ -67,40 +67,35 @@ public class Agent {
     }
 
 
-    private static void addExceptionHandling(InstructionList instructionList, MethodGen methodGen, JavaClass javaClass, String className, String methodName) throws TargetLostException {
+    private static void addExceptionHandling(InstructionList instructionList, MethodGen methodGen, JavaClass javaClass, String className, Method method, String methodName) throws TargetLostException {
 
         if (instructionList != null) {
             // Check if there is a try-catch block
             CodeExceptionGen[] exceptionHandlers = methodGen.getExceptionHandlers();
 
             if (exceptionHandlers.length == 0) {
-                // If there is no try-catch block, add a new one
-                InstructionHandle tryStart = instructionList.getStart();
-                InstructionHandle tryEnd = instructionList.getEnd();
-
-
-                ObjectType exceptionType = new ObjectType("java.lang.Exception");
 
                 logger.info("Bu metod'ta tryCatch block yok {}",methodName);
+;
+                Code code = method.getCode();
+                //InstructionList instructionList = new InstructionList(code.getCode());
 
-                InstructionList catchList = new InstructionList();
+                // Orijinal bytecode'ları saklamak için yeni bir instruction list oluştur
+                InstructionList originalInstructions = new InstructionList(code.getCode());
 
+                // Yöntemin içine try-catch bloğunu ekle
+                createTryCatchBlock(methodGen);
+                //instructionList.insert(tryCatchBlock);
 
-                ConstantPoolGen constantPoolGen = methodGen.getConstantPool();  // ConstantPoolGen alınır
-                int sysOutFieldRef = constantPoolGen.addFieldref("java/lang/System", "out", "Ljava/io/PrintStream;");
-                int stringConstRef = constantPoolGen.addString("Exception caught");
-                int printlnMethodRef = constantPoolGen.addMethodref("java/io/PrintStream", "println", "(Ljava/lang/String;)V");
+                // Yeni bytecode'ları yönteme set et
+                //code.setCode(instructionList.getByteCode());
 
-                catchList.append(new GETSTATIC(sysOutFieldRef));
-                catchList.append(new LDC(stringConstRef));
-                catchList.append(new INVOKEVIRTUAL(printlnMethodRef));
+                // Yöntemin boyutunu güncelle
+                //methodGen.getMethod().getCode().setCode(code.getCode());
 
-                InstructionHandle catchTarget = instructionList.append(catchList);
+                logger.info("sonuç: "+String.valueOf(methodGen.getMethod().getCode())+"\n");
 
-                methodGen.addExceptionHandler(tryStart,tryEnd,catchTarget,exceptionType);
-
-
-                Method method = methodGen.getMethod();
+                logger.info("sonuç: "+methodGen.getMethod().getCode().getCode()+"\n");
 
 
             } else {
@@ -115,5 +110,31 @@ public class Agent {
                 }
             }
         }
+    }
+
+    private static void createTryCatchBlock(MethodGen methodGen) {
+
+        InstructionList il = methodGen.getInstructionList();
+        InstructionHandle start = il.getStart();
+        InstructionHandle end = il.getEnd();
+
+        InstructionFactory factory = new InstructionFactory(methodGen.getConstantPool());
+
+        InstructionList originalInstructions = new InstructionList();
+        originalInstructions.append(new PUSH(methodGen.getConstantPool(), "Hello, World!"));
+        originalInstructions.append(factory.createInvoke("java.lang.System", "println", Type.VOID, new Type[]{Type.STRING}, Constants.INVOKESTATIC));
+
+        il.append(originalInstructions);
+
+        InstructionList tryCatchIL = new InstructionList();
+
+        InstructionHandle ih = tryCatchIL.append(factory.createInvoke("java.lang.System", "println", Type.VOID, new Type[]{Type.STRING}, Constants.INVOKESTATIC));
+
+        ObjectType exceptionType = new ObjectType("java/lang/Exception");
+
+        CodeExceptionGen handler = methodGen.addExceptionHandler(start, end, ih, exceptionType);
+
+        il.insert(start, tryCatchIL);
+
     }
 }
