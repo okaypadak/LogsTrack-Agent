@@ -1,12 +1,16 @@
 package dev.padak;
 
+import org.apache.bcel.Const;
 import org.apache.bcel.Constants;
 import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.*;
+import org.apache.bcel.verifier.structurals.Frame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
@@ -16,7 +20,7 @@ public class Agent {
 
     public static void premain(String agentArgs, Instrumentation instrumentation) {
 
-
+        System.out.println("Java Agent Started");
         instrumentation.addTransformer(new ExceptionLoggingTransformer());
     }
 
@@ -28,7 +32,7 @@ public class Agent {
 
             try {
 
-                if (className.startsWith("dev/padak/")) { // İlgili sınıfın adını değiştirin
+                if (className.startsWith("dev/padak/")) {
 
                     logger.info("Giriş:"+ className);
 
@@ -41,19 +45,16 @@ public class Agent {
                         logger.info("Method adı: "+ method.getName());
 
                         if (method.getCode() != null && !method.getName().equals("<init>")) {
+
                             MethodGen methodGen = new MethodGen(method, className, classGen.getConstantPool());
 
-                            InstructionList instructionList = new InstructionList(methodGen.getMethod().getCode().getCode());
+                            Method newMethod = addExceptionHandling(methodGen);
 
-                            // Exception dinleme kodu ve bilgileri alma
-                            addExceptionHandling(instructionList, methodGen, javaClass, className, method, method.getName());
-
-                            methodGen.setMaxStack();
-                            methodGen.setMaxLocals();
-                            classGen.replaceMethod(method, methodGen.getMethod());
+                            classGen.replaceMethod(method, newMethod);
                         }
                     }
 
+                    saveJavaFile(classGen, className);
                     return classGen.getJavaClass().getBytes();
                 }
 
@@ -67,41 +68,24 @@ public class Agent {
     }
 
 
-    private static void addExceptionHandling(InstructionList instructionList, MethodGen methodGen, JavaClass javaClass, String className, Method method, String methodName) throws TargetLostException {
+    private static Method addExceptionHandling(MethodGen methodGen) throws TargetLostException {
 
-        if (instructionList != null) {
+        if (methodGen.getInstructionList() != null) {
             // Check if there is a try-catch block
             CodeExceptionGen[] exceptionHandlers = methodGen.getExceptionHandlers();
 
             if (exceptionHandlers.length == 0) {
 
-                logger.info("Bu metod'ta tryCatch block yok {}",methodName);
+                logger.info("Bu metod'ta tryCatch block yok {} ",methodGen.getName());
 ;
-                Code code = method.getCode();
-                //InstructionList instructionList = new InstructionList(code.getCode());
+                Method newMethod = insertTryCatchBlock(methodGen);
 
-                // Orijinal bytecode'ları saklamak için yeni bir instruction list oluştur
-                InstructionList originalInstructions = new InstructionList(code.getCode());
-
-                // Yöntemin içine try-catch bloğunu ekle
-                createTryCatchBlock(methodGen);
-                //instructionList.insert(tryCatchBlock);
-
-                // Yeni bytecode'ları yönteme set et
-                //code.setCode(instructionList.getByteCode());
-
-                // Yöntemin boyutunu güncelle
-                //methodGen.getMethod().getCode().setCode(code.getCode());
-
-                logger.info("sonuç: "+String.valueOf(methodGen.getMethod().getCode())+"\n");
-
-                logger.info("sonuç: "+methodGen.getMethod().getCode().getCode()+"\n");
-
+                return newMethod;
 
             } else {
-                logger.info("Bu metod'ta tryCatch block var {}",methodName);
+                logger.info("Bu metod'ta tryCatch block var: {} ",methodGen.getName());
 
-                logger.info("Exception sayisi {}",exceptionHandlers.length);
+                logger.info("Exception sayisi: {}",exceptionHandlers.length);
 
                 for(CodeExceptionGen tek: exceptionHandlers) {
 
@@ -110,31 +94,44 @@ public class Agent {
                 }
             }
         }
+        return methodGen.getMethod();
     }
 
-    private static void createTryCatchBlock(MethodGen methodGen) {
+    private static Method insertTryCatchBlock(MethodGen oldmg) {
 
-        InstructionList il = methodGen.getInstructionList();
-        InstructionHandle start = il.getStart();
-        InstructionHandle end = il.getEnd();
+        InstructionList oldIl = oldmg.getInstructionList();
 
-        InstructionFactory factory = new InstructionFactory(methodGen.getConstantPool());
+        InstructionFactory factory = new InstructionFactory(oldmg.getConstantPool());
 
-        InstructionList originalInstructions = new InstructionList();
-        originalInstructions.append(new PUSH(methodGen.getConstantPool(), "Hello, World!"));
-        originalInstructions.append(factory.createInvoke("java.lang.System", "println", Type.VOID, new Type[]{Type.STRING}, Constants.INVOKESTATIC));
+        // Create Try-Catch block
+        InstructionHandle tryStart = oldIl.getStart();
+        InstructionHandle tryEnd = oldIl.getEnd();
 
-        il.append(originalInstructions);
+        ObjectType exceptionType = new ObjectType("java.lang.ArithmeticException");
 
-        InstructionList tryCatchIL = new InstructionList();
+        // Add catch block
+        InstructionList catchList = new InstructionList();
+        catchList.append(factory.createPrintln("ArithmeticException occurred!"));
 
-        InstructionHandle ih = tryCatchIL.append(factory.createInvoke("java.lang.System", "println", Type.VOID, new Type[]{Type.STRING}, Constants.INVOKESTATIC));
+        InstructionHandle catchHandler = oldIl.append(catchList);
 
-        ObjectType exceptionType = new ObjectType("java/lang/Exception");
+        // Add exception type to catch block
+        oldmg.addExceptionHandler(tryStart, tryEnd, catchHandler, exceptionType);
 
-        CodeExceptionGen handler = methodGen.addExceptionHandler(start, end, ih, exceptionType);
+        // Update the method with the modified instruction list
+        oldmg.setInstructionList(oldIl);
 
-        il.insert(start, tryCatchIL);
-
+        return oldmg.getMethod();
     }
+
+
+    private static void saveJavaFile(ClassGen classGen, String className) throws IOException {
+
+        try (FileOutputStream fos = new FileOutputStream("C:\\Users\\Okay Padak\\Desktop\\JavaAgent\\"+className + ".class")) {
+            fos.write(classGen.getJavaClass().getBytes());
+        } catch (IOException e) {
+            logger.error("Error saving .java file for class: {}", className, e);
+        }
+    }
+
 }
